@@ -1,16 +1,15 @@
+
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.*;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
+import java.util.*;
 import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.FlatDarkLaf;
 
-// ===== MODEL =====
 class Student implements Serializable {
     String id, name, dob, classId;
-
     Student(String id, String name, String dob, String classId) {
         this.id = id;
         this.name = name;
@@ -19,306 +18,312 @@ class Student implements Serializable {
     }
 }
 
-// ===== MAIN =====
+class LoginFrame extends JFrame {
+    static String adminUser = "Admin";
+    static String adminPass = "2006";
+
+    public LoginFrame() {
+        setTitle("Login");
+        setSize(350, 220);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLayout(new GridBagLayout());
+
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(10,10,10,10);
+        g.fill = GridBagConstraints.HORIZONTAL;
+
+        JTextField user = new JTextField();
+        JPasswordField pass = new JPasswordField();
+
+        g.gridx=0; g.gridy=0; add(new JLabel("Username:"), g);
+        g.gridx=1; add(user, g);
+
+        g.gridx=0; g.gridy=1; add(new JLabel("Password:"), g);
+        g.gridx=1; add(pass, g);
+
+        JButton btn = new JButton("Login");
+        g.gridx=0; g.gridy=2; g.gridwidth=2;
+        add(btn, g);
+
+        btn.addActionListener(e -> {
+            if(user.getText().equals(adminUser) && new String(pass.getPassword()).equals(adminPass)){
+                new StudentGUI().setVisible(true);
+                dispose();
+            } else JOptionPane.showMessageDialog(this,"Sai tài khoản!");
+        });
+    }
+}
+
 public class StudentGUI extends JFrame {
+
     ArrayList<Student> list = new ArrayList<>();
-
-    JTextField txtId, txtName, txtClass;
-    JSpinner txtDob;
-
     DefaultTableModel model;
     JTable table;
 
-    CardLayout cardLayout;
-    JPanel contentPanel;
+    JTextField txtName, txtClass, search;
+    JSpinner txtDob;
 
-    JButton btnHome, btnManage;
+    boolean isDark = false;
+    final String FILE = "students.dat";
 
-    // 🔥 label dashboard
-    JLabel totalStudentLabel;
-
-    final String FILE_NAME = "students.dat";
-
-    // ===== AUTO ID =====
-    String generateID() {
+    // ===== ID =====
+    String generateID(){
         int max = 0;
-        for (Student s : list) {
-            try {
-                int num = Integer.parseInt(s.id.replace("SV", ""));
-                if (num > max) max = num;
-            } catch (Exception e) {}
+        for(Student s : list){
+            try{
+                int num = Integer.parseInt(s.id.replace("SV",""));
+                if(num > max) max = num;
+            }catch(Exception e){}
         }
         return String.format("SV%03d", max + 1);
     }
 
-    // ===== UPDATE DASHBOARD =====
-    void updateDashboard() {
-        if (totalStudentLabel != null) {
-            totalStudentLabel.setText(String.valueOf(list.size()));
-        }
-    }
-
-    // ===== SIDEBAR ACTIVE =====
-    void setActive(JButton btn) {
-        btnHome.setBackground(Color.WHITE);
-        btnManage.setBackground(Color.WHITE);
-        btn.setBackground(new Color(200, 230, 255));
-    }
-
-    public StudentGUI() {
-        setTitle("Quan Ly Sinh Vien");
-        setSize(1000, 600);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+    public StudentGUI(){
+        setTitle("Student Manager");
+        setSize(1000,600);
         setLocationRelativeTo(null);
-
-        loadFromFile();
-
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
+        load();
+
+        // ===== TOP =====
+        JPanel top = new JPanel(new BorderLayout());
+        JLabel title = new JLabel(" Student Manager");
+
+        JButton darkBtn = new JButton("🌙");
+        darkBtn.addActionListener(e->{
+            try{
+                if(!isDark){ UIManager.setLookAndFeel(new FlatDarkLaf()); darkBtn.setText("☀"); }
+                else { UIManager.setLookAndFeel(new FlatLightLaf()); darkBtn.setText("🌙"); }
+                isDark=!isDark;
+                SwingUtilities.updateComponentTreeUI(this);
+            }catch(Exception ex){}
+        });
+
+        JButton logout = new JButton("Logout");
+        logout.addActionListener(e->{dispose(); new LoginFrame().setVisible(true);});
+
+        JPanel right = new JPanel();
+        right.add(darkBtn);
+        right.add(logout);
+
+        top.add(title,BorderLayout.WEST);
+        top.add(right,BorderLayout.EAST);
+        add(top,BorderLayout.NORTH);
+
         // ===== SIDEBAR =====
-        JPanel sidebar = new JPanel();
-        sidebar.setBackground(new Color(33, 150, 243));
-        sidebar.setPreferredSize(new Dimension(200, getHeight()));
-        sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+        JPanel side = new JPanel(new GridLayout(6,1,10,10));
+        JButton home = new JButton("🏠 Dashboard");
+        JButton manage = new JButton("🎓 Students");
+        side.add(home);
+        side.add(manage);
+        add(side,BorderLayout.WEST);
 
-        JLabel title = new JLabel(" MENU");
-        title.setForeground(Color.WHITE);
-        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        title.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        sidebar.add(Box.createVerticalStrut(20));
-        sidebar.add(title);
-        sidebar.add(Box.createVerticalStrut(30));
-
-        btnHome = new JButton("🏠 Trang chu");
-        btnManage = new JButton("👨‍🎓 Sinh vien");
-
-        for (JButton b : new JButton[]{btnHome, btnManage}) {
-            b.setMaximumSize(new Dimension(180, 45));
-            b.setAlignmentX(Component.CENTER_ALIGNMENT);
-            b.setFocusPainted(false);
-            b.setBackground(Color.WHITE);
-            sidebar.add(b);
-            sidebar.add(Box.createVerticalStrut(10));
-        }
-
-        add(sidebar, BorderLayout.WEST);
-
-        // ===== CARD =====
-        cardLayout = new CardLayout();
-        contentPanel = new JPanel(cardLayout);
+        // ===== CONTENT =====
+        CardLayout cl = new CardLayout();
+        JPanel content = new JPanel(cl);
 
         // ===== DASHBOARD =====
-        JPanel homePanel = new JPanel(new GridLayout(2, 2, 20, 20));
-        homePanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
-        homePanel.setBackground(new Color(245,247,250));
+        JPanel dash = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.gridx=0; g.gridy=0;
+        g.weightx=1; g.weighty=1;
 
-        homePanel.add(createCard("👨‍🎓 Tong SV", "" + list.size(), new Color(76,175,80)));
-        homePanel.add(createCard("📘 Lop", "TKPTG", new Color(33,150,243)));
-        homePanel.add(createCard("🎂 Trung binh tuoi", "20", new Color(255,152,0)));
-        homePanel.add(createCard("⭐ Trang thai", "Hoat dong", new Color(156,39,176)));
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER,25,20));
+        row.setOpaque(false);
 
-        // ===== FORM =====
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Thong tin sinh vien"));
-        panel.setBackground(Color.WHITE);
+        row.add(createCard("Total Students", ""+list.size(), new Color(76,175,80)));
+        row.add(createCard("Classes", "TKPTG", new Color(33,150,243)));
+        row.add(createCard("Status", "Active", new Color(156,39,176)));
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10,10,10,10);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
+        dash.add(row,g);
 
-        gbc.gridx=0; gbc.gridy=0;
-        panel.add(new JLabel("Ma SV:"), gbc);
+        // ===== STUDENT =====
+        JPanel student = new JPanel(new BorderLayout());
 
-        gbc.gridx=1;
-        txtId = new JTextField(15);
-        txtId.setEditable(false);
-        txtId.setText(generateID());
-        panel.add(txtId, gbc);
-
-        gbc.gridx=0; gbc.gridy=1;
-        panel.add(new JLabel("Ho & Ten:"), gbc);
-
-        gbc.gridx=1;
-        txtName = new JTextField(15);
-        panel.add(txtName, gbc);
-
-        gbc.gridx=0; gbc.gridy=2;
-        panel.add(new JLabel("Ngay sinh:"), gbc);
-
-        gbc.gridx=1;
+        JPanel form = new JPanel(new GridLayout(2,4,10,10));
+        txtName = new JTextField();
+        txtClass = new JTextField();
         txtDob = new JSpinner(new SpinnerDateModel());
         txtDob.setEditor(new JSpinner.DateEditor(txtDob, "dd/MM/yyyy"));
-        panel.add(txtDob, gbc);
 
-        gbc.gridx=0; gbc.gridy=3;
-        panel.add(new JLabel("Ma lop:"), gbc);
+        JButton add = new JButton("Add");
+        JButton delete = new JButton("Delete");
+        JButton edit = new JButton("Edit");
 
-        gbc.gridx=1;
-        txtClass = new JTextField(15);
-        panel.add(txtClass, gbc);
+        form.add(new JLabel("Name"));
+        form.add(new JLabel("Class"));
+        form.add(new JLabel("DOB"));
+        form.add(new JLabel(""));
+        form.add(txtName);
+        form.add(txtClass);
+        form.add(txtDob);
+        form.add(add);
 
-        gbc.gridx=0; gbc.gridy=4;
-        JButton btnAdd = new JButton("Them");
-        panel.add(btnAdd, gbc);
-
-        gbc.gridx=1;
-        JButton btnUpdate = new JButton("Sua");
-        panel.add(btnUpdate, gbc);
-
-        // ===== TABLE =====
-        model = new DefaultTableModel(new String[]{"Ma SV","Ten","Ngay sinh","Lop"},0);
+        model = new DefaultTableModel(new String[]{"ID","Name","DOB","Class"},0){
+            public boolean isCellEditable(int row, int column){
+                return false;
+            }
+        };
         table = new JTable(model);
-        table.setRowHeight(28);
-
-        JScrollPane scroll = new JScrollPane(table);
 
         JPanel bottom = new JPanel();
-        JButton btnDelete = new JButton("Xoa");
-        JButton btnSearch = new JButton("Tim");
-        JButton btnReset = new JButton("Reset");
+        search = new JTextField(15);
+        bottom.add(new JLabel("Search"));
+        bottom.add(search);
+        bottom.add(edit);
+        bottom.add(delete);
 
-        bottom.add(btnDelete);
-        bottom.add(btnSearch);
-        bottom.add(btnReset);
+        student.add(form,BorderLayout.NORTH);
+        student.add(new JScrollPane(table),BorderLayout.CENTER);
+        student.add(bottom,BorderLayout.SOUTH);
 
-        JPanel studentPanel = new JPanel(new BorderLayout());
-        studentPanel.add(panel, BorderLayout.NORTH);
-        studentPanel.add(scroll, BorderLayout.CENTER);
-        studentPanel.add(bottom, BorderLayout.SOUTH);
+        content.add(dash,"HOME");
+        content.add(student,"STUDENT");
 
-        contentPanel.add(homePanel, "HOME");
-        contentPanel.add(studentPanel, "STUDENT");
+        add(content,BorderLayout.CENTER);
 
-        add(contentPanel, BorderLayout.CENTER);
+        home.addActionListener(e->cl.show(content,"HOME"));
+        manage.addActionListener(e->cl.show(content,"STUDENT"));
 
-        showData();
-        updateDashboard(); // 🔥 init
+        // ===== ACTION =====
+        add.addActionListener(e->{
+            list.add(new Student(generateID(),
+                    txtName.getText(),
+                    new java.text.SimpleDateFormat("dd/MM/yyyy").format((Date)txtDob.getValue()),
+                    txtClass.getText()));
+            save(); refresh();
 
-        // ===== SIDEBAR =====
-        btnHome.addActionListener(e -> {
-            cardLayout.show(contentPanel, "HOME");
-            setActive(btnHome);
+            txtName.setText("");
+            txtClass.setText("");
+            txtDob.setValue(new Date());
         });
 
-        btnManage.addActionListener(e -> {
-            cardLayout.show(contentPanel, "STUDENT");
-            setActive(btnManage);
+        delete.addActionListener(e->{
+            int r=table.getSelectedRow();
+            if(r>=0){ list.remove(r); save(); refresh(); }
         });
 
-        setActive(btnHome);
+        edit.addActionListener(e->{
+            int r = table.getSelectedRow();
+            if(r >= 0){
+                Student s = list.get(r);
 
-        // ===== ADD =====
-        btnAdd.addActionListener(e -> {
-            String id = generateID();
-            String name = txtName.getText().trim();
-            String classId = txtClass.getText().trim();
+                JDialog dialog = new JDialog(this, "Edit Student", true);
+                dialog.setSize(350,250);
+                dialog.setLocationRelativeTo(this);
+                dialog.setLayout(new BorderLayout());
 
-            Date date = (Date) txtDob.getValue();
-            String dob = new SimpleDateFormat("dd/MM/yyyy").format(date);
+                JPanel panel = new JPanel(new GridLayout(3,2,10,10));
+                panel.setBorder(BorderFactory.createEmptyBorder(15,15,15,15));
 
-            if(name.isEmpty() || classId.isEmpty()){
-                JOptionPane.showMessageDialog(this,"Khong duoc de trong!");
-                return;
+                JTextField nameField = new JTextField(s.name);
+                JTextField classField = new JTextField(s.classId);
+                JSpinner dobField = new JSpinner(new SpinnerDateModel());
+                dobField.setEditor(new JSpinner.DateEditor(dobField, "dd/MM/yyyy"));
+
+                try{
+                    Date d = new java.text.SimpleDateFormat("dd/MM/yyyy").parse(s.dob);
+                    dobField.setValue(d);
+                }catch(Exception ex){}
+
+                panel.add(new JLabel("Name")); panel.add(nameField);
+                panel.add(new JLabel("Class")); panel.add(classField);
+                panel.add(new JLabel("DOB")); panel.add(dobField);
+
+                JPanel actions = new JPanel();
+                JButton saveBtn = new JButton("Save");
+                JButton cancelBtn = new JButton("Cancel");
+
+                actions.add(saveBtn);
+                actions.add(cancelBtn);
+
+                dialog.add(panel, BorderLayout.CENTER);
+                dialog.add(actions, BorderLayout.SOUTH);
+
+                saveBtn.addActionListener(ev->{
+                    s.name = nameField.getText();
+                    s.classId = classField.getText();
+                    s.dob = new java.text.SimpleDateFormat("dd/MM/yyyy").format((Date)dobField.getValue());
+                    save();
+                    refresh();
+                    dialog.dispose();
+                });
+
+                cancelBtn.addActionListener(ev-> dialog.dispose());
+
+                dialog.setVisible(true);
             }
-
-            list.add(new Student(id,name,dob,classId));
-            saveToFile();
-            showData();
-            updateDashboard(); // 🔥 realtime
-            clear();
         });
 
-        // DELETE
-        btnDelete.addActionListener(e -> {
-            int row = table.getSelectedRow();
-            if(row>=0){
-                list.remove(row);
-                saveToFile();
-                showData();
-                updateDashboard(); // 🔥 realtime
-                clear();
-            }
-        });
-
-        // SEARCH
-        btnSearch.addActionListener(e -> {
-            String k = JOptionPane.showInputDialog(this,"Nhap:");
-            if(k==null) return;
-
-            k=k.toLowerCase();
-            model.setRowCount(0);
-
-            for(Student s:list){
-                if(s.name.toLowerCase().contains(k) || s.id.toLowerCase().contains(k)){
-                    model.addRow(new Object[]{s.id,s.name,s.dob,s.classId});
+        search.addKeyListener(new java.awt.event.KeyAdapter(){
+            public void keyReleased(java.awt.event.KeyEvent e){
+                model.setRowCount(0);
+                for(Student s:list){
+                    if(s.name.toLowerCase().contains(search.getText().toLowerCase())){
+                        model.addRow(new Object[]{s.id,s.name,s.dob,s.classId});
+                    }
                 }
             }
         });
 
-        btnReset.addActionListener(e->showData());
+        refresh();
     }
 
     // ===== CARD =====
-    JPanel createCard(String title,String value,Color color){
-        JPanel p = new JPanel(new BorderLayout());
-        p.setBackground(color);
-        p.setBorder(BorderFactory.createEmptyBorder(20,20,20,20));
+    JPanel createCard(String t,String v,Color color){
+        JPanel p = new JPanel(new BorderLayout()){
+            protected void paintComponent(Graphics g){
+                Graphics2D g2=(Graphics2D)g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(color);
+                g2.fillRoundRect(0,0,getWidth(),getHeight(),30,30);
+            }
+        };
+        p.setOpaque(false);
+        p.setPreferredSize(new Dimension(200,110));
+        p.setBorder(BorderFactory.createEmptyBorder(15,15,15,15));
 
-        JLabel t = new JLabel(title);
-        t.setForeground(Color.WHITE);
+        JLabel title = new JLabel(t);
+        title.setForeground(Color.WHITE);
 
-        JLabel v = new JLabel(value);
-        v.setFont(new Font("Segoe UI",Font.BOLD,24));
-        v.setForeground(Color.WHITE);
+        JLabel value = new JLabel(v);
+        value.setForeground(Color.WHITE);
+        value.setFont(new Font("Segoe UI",Font.BOLD,24));
 
-        if(title.contains("Tong SV")){
-            totalStudentLabel = v; // 🔥 bind label
-        }
-
-        p.add(t,BorderLayout.NORTH);
-        p.add(v,BorderLayout.CENTER);
+        p.add(title,BorderLayout.NORTH);
+        p.add(value,BorderLayout.CENTER);
 
         return p;
     }
 
-    void showData(){
+    void refresh(){
         model.setRowCount(0);
         for(Student s:list){
             model.addRow(new Object[]{s.id,s.name,s.dob,s.classId});
         }
     }
 
-    void saveToFile(){
+    void save(){
         try{
-            ObjectOutputStream oos=new ObjectOutputStream(new FileOutputStream(FILE_NAME));
-            oos.writeObject(list);
-            oos.close();
-        }catch(Exception e){e.printStackTrace();}
+            ObjectOutputStream o=new ObjectOutputStream(new FileOutputStream(FILE));
+            o.writeObject(list);
+            o.close();
+        }catch(Exception e){}
     }
 
-    void loadFromFile(){
+    void load(){
         try{
-            ObjectInputStream ois=new ObjectInputStream(new FileInputStream(FILE_NAME));
-            list=(ArrayList<Student>)ois.readObject();
-            ois.close();
-        }catch(Exception e){
-            list=new ArrayList<>();
-        }
+            ObjectInputStream o=new ObjectInputStream(new FileInputStream(FILE));
+            list=(ArrayList<Student>)o.readObject();
+            o.close();
+        }catch(Exception e){ list=new ArrayList<>(); }
     }
 
-    void clear(){
-        txtName.setText("");
-        txtClass.setText("");
-        txtDob.setValue(new Date());
-        txtId.setText(generateID());
-    }
-
-    public static void main(String[] args) {
-        try {
-            UIManager.setLookAndFeel(new FlatLightLaf());
-        } catch (Exception e) {}
-
-        new StudentGUI().setVisible(true);
+    public static void main(String[] args){
+        try{ UIManager.setLookAndFeel(new FlatLightLaf()); }catch(Exception e){}
+        new LoginFrame().setVisible(true);
     }
 }
