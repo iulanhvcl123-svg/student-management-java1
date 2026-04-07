@@ -1,1 +1,1 @@
-# student-management-java1
+ứng dụng quản lý sinh viên viết bằng Java Swing.
